@@ -11,6 +11,10 @@ clock: main.o
 main.o: main.c
 	gcc -c main.c
 
+test:
+	make
+	./clock 20 pageref-small.txt 1 10 20
+
 clean: 
 	rm *.o clock
 
