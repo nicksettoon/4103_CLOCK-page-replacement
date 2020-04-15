@@ -9,6 +9,28 @@ LogonID: cs410361
 
 #include <stdio.h>
 
+
+struct clock_entry{
+    int* pgaddr;
+    unsigned int dirty : 1;
+    unsigned int ref : 1;
+    struct clock_entry* nextpage;
+};
+typedef struct clock_entry clk;
+
+// enum PageOperation {READ = 0, WRITE};
+// struct page_ref_list_entry{
+//     enum PageOperation op;
+//     int pagenum;
+//     struct page_ref_list_entry* nextref;
+// };
+// typedef struct page_ref_list_entry pg_ref;
+// pg_ref* listhead;   //head of the page reference list
+// pg_ref* prevref = &listhead; // 
+// pg_ref* ref = (pg_ref *) malloc(sizeof(pg_ref));
+// ref->pagenum = pagenum;
+// ref->op = 0;
+
 int main(int argcount, char* argv[]) {
 
     //get page frame count
@@ -29,16 +51,17 @@ int main(int argcount, char* argv[]) {
     else
         printf("Page references file opened.\n");
     
-    int i = 0; //counter for page ref count
-    char ref[10];//need to set readline width = page frame digits + 2 
+    int i = 0; //counter for page currentref count
+    char currentref[10];//need to set readline width = page frame digits + 2 
 
-    char operation;
-    int pagenum;
-    while (fgets(ref, 10, page_refs) != NULL)
+    char operation; //page operation read from file
+    int pagenum;    //page number read from file
+    
+    while (fgets(currentref, 10, page_refs) != NULL)
     {//grab each page reference line in the text file
         i++;
-        printf("%s", ref); //print the line
-        sscanf(ref,"%s %d", &operation, &pagenum); //parse line
+        printf("%s", currentref); //print the line
+        sscanf(currentref,"%s %d", &operation, &pagenum); //parse line
 
         if (operation == 'r' || operation == 'R')
         {//if reference is a read

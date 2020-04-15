@@ -11,7 +11,11 @@ clock: main.o
 main.o: main.c
 	gcc -c main.c
 
-test:
+full:
+	make
+	./clock 20 pageref.txt 1 10 20
+
+small:
 	make
 	./clock 20 pageref-small.txt 1 10 20
 
@@ -23,3 +27,8 @@ submit:
 	rm .*
 	rm *.pdf
 	rm *.code-workspace
+
+git:
+	git add -A
+	git commit -m $(msg)
+	git push
