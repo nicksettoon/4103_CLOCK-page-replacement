@@ -12,7 +12,7 @@ $ ./clock avail_page_frames page_references.txt page_access_time page_swapin_tim
 
 OUTPUT:
 
-Page References: simple count of how many page references were made. Should be the length of the file.
+Page References: simple count of how many page references were made. Should be the number of lines in the file.
 
 Page Faults on READ: number of page misses on read references.
 
