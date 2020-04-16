@@ -11,9 +11,15 @@ $ ./clock avail_page_frames page_references.txt page_access_time page_swapin_tim
     e.g. $ ./clock 15 pageref.txt 1 10 20
 
 OUTPUT:
+
 Page References: simple count of how many page references were made. Should be the length of the file.
+
 Page Faults on READ: number of page misses on read references.
+
 Page Faults on WRITE: number of page misses on write references.
+
 Cummulative memory access time: total time spent accessing pages on page hit
+
 Cummulative time spent swapping pages in: total time spent waiting for page arrival in memory.
+
 Cummulative time spent swapping pages out: total time spent waiting for page write out to disk.
