@@ -18,7 +18,7 @@ Page Faults on READ: number of page misses on read references.
 
 Page Faults on WRITE: number of page misses on write references.
 
-Cummulative memory access time: total time spent accessing pages on page hit
+Cummulative memory access time: total time spent accessing pages(incremented on page hit and on page swap in)
 
 Cummulative time spent swapping pages in: total time spent waiting for page arrival in memory.
 
