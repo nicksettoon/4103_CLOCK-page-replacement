@@ -29,6 +29,7 @@ submit:
 	rm *.code-workspace
 
 git:
+	make clean
 	git add -A
 	git commit -m $(msg)
 	git push

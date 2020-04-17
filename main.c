@@ -8,6 +8,7 @@ LogonID: cs410361
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 struct page{
     int data;
