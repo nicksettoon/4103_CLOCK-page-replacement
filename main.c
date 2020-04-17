@@ -10,6 +10,8 @@ LogonID: cs410361
 #include <stdio.h>
 #include <stdlib.h>
 
+int __totalmemaccesstime = 0;
+
 struct page{
     int data;
     int pagenum;
@@ -114,12 +116,17 @@ void deletePageEntry(table* _tabletarget, pgentry* _entrytarget)
     free(_entrytarget);
 }
 
-pgentry* findPage(table* _tabletarget, int _pagetarget)
+pgentry* findPage(table* _tabletarget, int _pagetarget, int _memaccesscost)
 {//searches page table and returns page entry if found, NULL if not found.
+
     pgentry* currentry = _tabletarget->head;
     unsigned int found = 0;
 
     do{
+        __totalmemaccesstime += _memaccesscost;
+        if(currentry == NULL)
+            return NULL;
+            
         if (currentry->pgaddr->pagenum == _pagetarget) {//if find page entry with correct page number
             found = 1;
             break;
@@ -134,12 +141,17 @@ pgentry* findPage(table* _tabletarget, int _pagetarget)
         return NULL;
 }
 
-pgentry* findVictimPage(pgentry* _clockstart)
+pgentry* findVictimPage(table* _tabletarget, pgentry* _clockstart, int _memaccesscost)
 {//CLOCK algorithm implementation for finding least recently used page for eviction from memory.
-    pgentry* clockhand = _clockstart;
+    pgentry* clockhand;
+    if (_clockstart == NULL)
+        clockhand = _tabletarget->head;
+    else
+        clockhand = _clockstart;
     unsigned int found = 0;
 
     do{
+        __totalmemaccesstime += _memaccesscost;
         if (clockhand->ref == 0) {//if find page entry with correct page number
             found = 1;
             break;
@@ -157,31 +169,26 @@ pgentry* findVictimPage(pgentry* _clockstart)
         return NULL;
 }
 
-
-pgentry* swapIn(table* _tabletarget, pgentry* _entrytarget, int _pagetarget, int* _swapincounter, int _costtoswapin)
+pgentry* swapIn(table* _tabletarget, pgentry* _entrytarget, int _pagetarget)
 {//swaps the page frame from disk to memory, returning the entry pointer.
     //make new page
     pg* newpage = makePage(0,_pagetarget);
     //make new page table entry
     pgentry* newentry = insertPage(_tabletarget, newpage, _entrytarget);
-    //update counter
-    (*_swapincounter) += _costtoswapin;
-
     return newentry;
 }
 
-void swapOut(table* _tabletarget, pgentry* _entrytarget, int* _swapoutcounter, int _costtoswapout)
+void swapOut(table* _tabletarget, pgentry* _entrytarget)
 {//swaps the page frame from memory to disk if it is dirty, just frees page otherwise.
-    if(_entrytarget->dirty == 1) //if page has been written to
-        (*_swapoutcounter) += _costtoswapout; //increment counter
     
     deletePageEntry(_tabletarget, _entrytarget);
 }
 
+
 int main(int argcount, char* argv[])
 {//main is where the heart is.
     //get page frame count and create page table
-    const int PAGE_FRAMES = *argv[1];
+    const int PAGE_FRAMES = atoi(argv[1]);
     table pages;
     pages.full = 0;
     pages.currlength = 0;
@@ -193,15 +200,14 @@ int main(int argcount, char* argv[])
     FILE* pagerefs = fopen(argv[2],"r");
 
     //set memory access cost and init cost counter
-    const int MEM_ACCESS_COST = *argv[3];
-    int __totalmemaccesstime = 0;
+    const int MEM_ACCESS_COST = atoi(argv[3]);
 
     //set disk read cost and init cost counter
-    const int SWAP_IN_COST = *argv[4];
+    const int SWAP_IN_COST = atoi(argv[4]);
     int __totalswapintime = 0;
 
     //set disk write cost and init cost counter
-    const int SWAP_OUT_COST = *argv[5];
+    const int SWAP_OUT_COST = atoi(argv[5]);
     int __totalswapouttime = 0;
 
     //counter for page references read from file
@@ -223,18 +229,20 @@ int main(int argcount, char* argv[])
     char currreadref[10];//need to set readline width = page frame digits + 2 
     char operation; //page operation read from file
     int pagenum;    //page number read from file
-    pgentry* clockhand = pages.head;
+    pgentry* clockhand = NULL;
+
     
     while (fgets(currreadref, 10, pagerefs) != NULL)
     {//grab each page reference line in the text file
         __totalrefcount++;
-        // printf("%s", currreadref); //print the line
+        printf("\n%d: %s", __totalrefcount, currreadref); //print the line
         sscanf(currreadref,"%s %d", &operation, &pagenum); //parse line
-        pgentry* currpage = findPage(&pages, pagenum);
+        pgentry* currpage = findPage(&pages, pagenum, MEM_ACCESS_COST);
         pgentry* newentry;
         pgentry* swapintarget;
 
         if (currpage != NULL) {//page is found in memory (page hit)
+            printf("PAGE HIT! Page#: %d\n", currpage->pgaddr->pagenum);
             __totalmemaccesstime += MEM_ACCESS_COST; //increment counter
             currpage->ref = 1; //touch the page
             //if reference is a write
@@ -242,26 +250,29 @@ int main(int argcount, char* argv[])
                 currpage->dirty = 1; //write to page
         }
         else { //if page isn't in memory (page miss)
+            printf("PAGE MISS! Page#: %d\n", pagenum);
             if (pages.full == 1) {//if page table is full
+                printf("\nPage table full. Table count: %d", pages.currlength);
                 //find victim page
-                clockhand = findVictimPage(clockhand);
+                clockhand = findVictimPage(&pages, clockhand, MEM_ACCESS_COST);
+            
                 //prep for swapin after removal of clockhand's page
                 swapintarget = clockhand->prventry;
                 //swap the victim page out
-                swapOut(&pages, clockhand, &__totalswapouttime, SWAP_OUT_COST);
+                if(clockhand->dirty == 1) //if page has been written to
+                    __totalswapouttime += SWAP_OUT_COST; //increment counter
+                swapOut(&pages, clockhand);
                 //swap new page in to memory at clockhand's old position
-                newentry = swapIn(&pages, swapintarget, pagenum, &__totalswapintime, SWAP_IN_COST);
+                newentry = swapIn(&pages, swapintarget, pagenum);
+                __totalswapintime += SWAP_IN_COST;
                 //move clockhand forward one entry
                 clockhand = newentry->nxtentry;
             }
             else {//page table has space
-                // if (pages.head == NULL) //if table is empty
-                //     swapintarget = pages.head;
-                // else //table isn't empty
-                //     swapintarget = pages.tail;
                 swapintarget = pages.tail;
                 //swap new page in to target location
-                newentry = swapIn(&pages, swapintarget, pagenum, &__totalswapintime, SWAP_IN_COST);
+                newentry = swapIn(&pages, swapintarget, pagenum);
+                __totalswapintime += SWAP_IN_COST;
             }
 
             newentry->ref = 1; //touch the page
@@ -285,5 +296,12 @@ int main(int argcount, char* argv[])
     }
     fclose(pagerefs);
     
+    printf("\nTotal Page References: %d", __totalrefcount);
+    printf("\nTotal Page Faults on Reads: %d", __readfaults);
+    printf("\nTotal Page Faults on Writes: %d", __writefaults);
+    printf("\nTotal Memory Access Times: %d", __totalmemaccesstime);
+    printf("\nTotal Time Spent Swapping Pages In: %d", __totalswapintime);
+    printf("\nTotal Time Spent Swapping Pages Out: %d", __totalswapouttime);
+
     return 0;
 }

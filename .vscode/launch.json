@@ -4,13 +4,18 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
         {
-            "name": "(gdb) Launch",
+            "name": "gcc build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/clock",
-            "args": [],
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [
+                "20",
+                "pageref.txt",
+                "1",
+                "10",
+                "20"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -22,7 +27,9 @@
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
-            ]
+            ],
+            "preLaunchTask": "gcc",
+            "miDebuggerPath": "/usr/bin/gdb"
         }
     ]
 }
