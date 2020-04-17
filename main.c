@@ -48,25 +48,43 @@ pgentry* insertPage(table* _tabletarget, pg* _pagetarget, pgentry* _prventry)
         printf("Cannot insert page: %d. Table is full.", _pagetarget->pagenum);
         return NULL;
     }
-    else {
-        printf("Inserting page: %d", _pagetarget->pagenum);
-        pgentry* newentry = malloc(sizeof *newentry);
-        newentry->pgaddr = _pagetarget;
-        newentry->dirty = 0;
-        newentry->ref = 0;
 
-        //adjust pointers
+    printf("Inserting page: %d", _pagetarget->pagenum);
+    //make new page entry object
+    pgentry* newentry = malloc(sizeof *newentry);
+    newentry->pgaddr = _pagetarget;
+    newentry->dirty = 0;
+    newentry->ref = 0;
+
+    if (_tabletarget->head == NULL){//if table is empty
+        _tabletarget->head = newentry;
+        newentry->prventry = NULL;
+        newentry->nxtentry = NULL;
+    }
+    else if (_tabletarget->tail == NULL)
+    {//if table only has a head
+        _tabletarget->tail = newentry;
+        newentry->prventry = _tabletarget->head;
+        newentry->nxtentry = _tabletarget->head;
+        _tabletarget->head->prventry = newentry;
+        _tabletarget->head->nxtentry = newentry;
+    }
+    else
+    {
+        //fix newentry's pointers
         newentry->prventry = _prventry;
         newentry->nxtentry = _prventry->nxtentry;
+        //fix entries to left and right of newentry
         _prventry->nxtentry = newentry;
-
-        //update table metadata
-        _tabletarget->currlength++;
-        if (_tabletarget->currlength == _tabletarget->maxlength)
-            _tabletarget->full = 1;
-        
-        return newentry;
+        newentry->nxtentry->prventry = newentry;
     }
+
+    //update table metadata
+    _tabletarget->currlength++;
+    if (_tabletarget->currlength == _tabletarget->maxlength)
+        _tabletarget->full = 1;
+    
+    return newentry;
 }
 
 void deletePageEntry(table* _tabletarget, pgentry* _entrytarget)
@@ -100,15 +118,14 @@ pgentry* findPage(table* _tabletarget, int _pagetarget)
     pgentry* currentry = _tabletarget->head;
     unsigned int found = 0;
 
-    while (currentry != _tabletarget->tail){
-        if (currentry->pgaddr->pagenum == _pagetarget)
-        {//if find page entry with correct page number
+    do{
+        if (currentry->pgaddr->pagenum == _pagetarget) {//if find page entry with correct page number
             found = 1;
             break;
         }
         else //move to next entry
             currentry = currentry->nxtentry;
-    }
+    } while (currentry != _tabletarget->head);
     
     if (found == 1)
         return currentry;
@@ -116,10 +133,29 @@ pgentry* findPage(table* _tabletarget, int _pagetarget)
         return NULL;
 }
 
-pgentry* clockReplace(pgentry* _entrystart)
+pgentry* findVictimPage(pgentry* _clockstart)
 {//CLOCK algorithm implementation for finding least recently used page for eviction from memory.
+    pgentry* clockhand = _clockstart;
+    unsigned int found = 0;
 
+    do{
+        if (clockhand->ref == 0) {//if find page entry with correct page number
+            found = 1;
+            break;
+        }
+        else
+        {
+            clockhand->ref = 0; //set ref bit to 0
+            clockhand = clockhand->nxtentry;
+        }
+    } while(1);
+    
+    if (found == 1)
+        return clockhand;
+    else
+        return NULL;
 }
+
 
 pgentry* swapIn(table* _tabletarget, pgentry* _entrytarget, int _pagetarget, int* _swapincounter, int _costtoswapin)
 {//swaps the page frame from disk to memory, returning the entry pointer.
@@ -150,6 +186,7 @@ int main(int argcount, char* argv[])
     pages.currlength = 0;
     pages.maxlength = PAGE_FRAMES;
     pages.head = NULL;
+    pages.tail = NULL;
 
     //open page reference file
     FILE* pagerefs = fopen(argv[2],"r");
@@ -185,12 +222,12 @@ int main(int argcount, char* argv[])
     char currreadref[10];//need to set readline width = page frame digits + 2 
     char operation; //page operation read from file
     int pagenum;    //page number read from file
-    pgentry* clockhand;
+    pgentry* clockhand = pages.head;
     
     while (fgets(currreadref, 10, pagerefs) != NULL)
     {//grab each page reference line in the text file
         __totalrefcount++;
-        printf("%s", currreadref); //print the line
+        // printf("%s", currreadref); //print the line
         sscanf(currreadref,"%s %d", &operation, &pagenum); //parse line
         pgentry* currpage = findPage(&pages, pagenum);
         pgentry* newentry;
@@ -206,7 +243,7 @@ int main(int argcount, char* argv[])
         else { //if page isn't in memory (page miss)
             if (pages.full == 1) {//if page table is full
                 //find victim page
-                clockhand = clockReplace(clockhand);
+                clockhand = findVictimPage(clockhand);
                 //prep for swapin after removal of clockhand's page
                 swapintarget = clockhand->prventry;
                 //swap the victim page out
@@ -217,8 +254,12 @@ int main(int argcount, char* argv[])
                 clockhand = newentry->nxtentry;
             }
             else {//page table has space
-                //swap new page in to end of table
+                // if (pages.head == NULL) //if table is empty
+                //     swapintarget = pages.head;
+                // else //table isn't empty
+                //     swapintarget = pages.tail;
                 swapintarget = pages.tail;
+                //swap new page in to target location
                 newentry = swapIn(&pages, swapintarget, pagenum, &__totalswapintime, SWAP_IN_COST);
             }
 
