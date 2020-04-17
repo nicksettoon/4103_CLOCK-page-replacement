@@ -42,16 +42,16 @@ struct page_table{
 };
 typedef struct page_table table;
 
-pgentry* insertPage(table* _tabletarget, pg* _targetpage, pgentry* _prventry)
+pgentry* insertPage(table* _tabletarget, pg* _pagetarget, pgentry* _prventry)
 {//creates an page table entry for the target page and inserts it after the target entry
     if (_tabletarget->full == 1) {//if page table is full
-        printf("Cannot insert page: %d. Table is full.", _targetpage->pagenum);
+        printf("Cannot insert page: %d. Table is full.", _pagetarget->pagenum);
         return NULL;
     }
     else {
-        printf("Inserting page: %d", _targetpage->pagenum);
+        printf("Inserting page: %d", _pagetarget->pagenum);
         pgentry* newentry = malloc(sizeof *newentry);
-        newentry->pgaddr = _targetpage;
+        newentry->pgaddr = _pagetarget;
         newentry->dirty = 0;
         newentry->ref = 0;
 
@@ -69,12 +69,12 @@ pgentry* insertPage(table* _tabletarget, pg* _targetpage, pgentry* _prventry)
     }
 }
 
-void deletePageEntry(table* _tabletarget, pgentry* _targetentry)
+void deletePageEntry(table* _tabletarget, pgentry* _entrytarget)
 {
     //temp store appropriate pointers
-    pg* page = _targetentry->pgaddr;
-    pgentry* prv = _targetentry->prventry;
-    pgentry* nxt = _targetentry->nxtentry;
+    pg* page = _entrytarget->pgaddr;
+    pgentry* prv = _entrytarget->prventry;
+    pgentry* nxt = _entrytarget->nxtentry;
 
     //stitch linked list together
     prv->nxtentry = nxt;
@@ -83,46 +83,62 @@ void deletePageEntry(table* _tabletarget, pgentry* _targetentry)
     _tabletarget->full = 0;
 
     //if deleting the head of the linked list
-    if(_tabletarget->head = _targetentry)
+    if(_tabletarget->head = _entrytarget)
         _tabletarget->head = nxt;
 
     //if deleting the tail of the linked list
-    if(_tabletarget->tail = _targetentry)
+    if(_tabletarget->tail = _entrytarget)
         _tabletarget->tail = prv;
 
     //free memory for page and its entry
     free(page);
-    free(_targetentry);
+    free(_entrytarget);
 }
 
-pgentry* findPage(int _targetpage, table* _pagetable)
+pgentry* findPage(table* _tabletarget, int _pagetarget)
 {//searches page table and returns page entry if found, NULL if not found.
+    pgentry* currentry = _tabletarget->head;
+    unsigned int found = 0;
 
+    while (currentry != _tabletarget->tail){
+        if (currentry->pgaddr->pagenum == _pagetarget)
+        {//if find page entry with correct page number
+            found = 1;
+            break;
+        }
+        else //move to next entry
+            currentry = currentry->nxtentry;
+    }
+    
+    if (found == 1)
+        return currentry;
+    else
+        return NULL;
 }
 
-pgentry* clockReplace(pgentry* _startpage)
+pgentry* clockReplace(pgentry* _entrystart)
 {//CLOCK algorithm implementation for finding least recently used page for eviction from memory.
 
 }
 
-pgentry* swapIn(int _cost, int* _costcounter, int _targetpage, table* _tabletarget)
-{//swaps the page frame from disk to memory, incrementing the counter.
+pgentry* swapIn(table* _tabletarget, pgentry* _entrytarget, int _pagetarget, int* _swapincounter, int _costtoswapin)
+{//swaps the page frame from disk to memory, returning the entry pointer.
     //make new page
-    pg* newpage = makePage(0,_targetpage);
-
+    pg* newpage = makePage(0,_pagetarget);
     //make new page table entry
-    pgentry* newentry = insertPage(_tabletarget, newpage, _tabletarget->tail);
-
-    //add on swap in cost
-    (*_costcounter) += _cost;
+    pgentry* newentry = insertPage(_tabletarget, newpage, _entrytarget);
+    //update counter
+    (*_swapincounter) += _costtoswapin;
 
     return newentry;
 }
 
-void swapOut(int _cost, int _costcounter, pgentry* _targetpage)
-{//swaps the page frame from disk to memory, incrementing the counter.
-    pg* victimpage = _targetpage->pgaddr;
-
+void swapOut(table* _tabletarget, pgentry* _entrytarget, int* _swapoutcounter, int _costtoswapout)
+{//swaps the page frame from memory to disk if it is dirty, just frees page otherwise.
+    if(_entrytarget->dirty == 1) //if page has been written to
+        (*_swapoutcounter) += _costtoswapout; //increment counter
+    
+    deletePageEntry(_tabletarget, _entrytarget);
 }
 
 int main(int argcount, char* argv[])
@@ -169,47 +185,60 @@ int main(int argcount, char* argv[])
     char currreadref[10];//need to set readline width = page frame digits + 2 
     char operation; //page operation read from file
     int pagenum;    //page number read from file
+    pgentry* clockhand;
     
-   tablewhile (fgets(currreadref, 10, pagerefs) != NULL)
+    while (fgets(currreadref, 10, pagerefs) != NULL)
     {//grab each page reference line in the text file
         __totalrefcount++;
         printf("%s", currreadref); //print the line
         sscanf(currreadref,"%s %d", &operation, &pagenum); //parse line
+        pgentry* currpage = findPage(&pages, pagenum);
+        pgentry* newentry;
+        pgentry* swapintarget;
 
-        if (page_table() == NULL) {//if page isn't in memory
-            pgentry* newentry = swapIn(SWAP_IN_COST, &__totalswapintime, pagenum);//swap page in to memory
-
+        if (currpage != NULL) {//page is found in memory (page hit)
+            __totalmemaccesstime += MEM_ACCESS_COST; //increment counter
+            currpage->ref = 1; //touch the page
+            //if reference is a write
+            if (operation == 'w' || operation == 'W')
+                currpage->dirty = 1; //write to page
+        }
+        else { //if page isn't in memory (page miss)
             if (pages.full == 1) {//if page table is full
                 //find victim page
-                //swap it out
-                //put newentry in its place
+                clockhand = clockReplace(clockhand);
+                //prep for swapin after removal of clockhand's page
+                swapintarget = clockhand->prventry;
+                //swap the victim page out
+                swapOut(&pages, clockhand, &__totalswapouttime, SWAP_OUT_COST);
+                //swap new page in to memory at clockhand's old position
+                newentry = swapIn(&pages, swapintarget, pagenum, &__totalswapintime, SWAP_IN_COST);
+                //move clockhand forward one entry
+                clockhand = newentry->nxtentry;
             }
-            else {//page table is empty
-                //update
-                //insert new page entry 
+            else {//page table has space
+                //swap new page in to end of table
+                swapintarget = pages.tail;
+                newentry = swapIn(&pages, swapintarget, pagenum, &__totalswapintime, SWAP_IN_COST);
             }
-            if (operation == 'r' || operation == 'R')
-            {//if reference is a read
-                newentry->ref = 1;//page has been read
-                // printf("%d: read page %d\n", __totalrefcount, pagenum);
-                __readfaults++;
 
-            }
+            newentry->ref = 1; //touch the page
+            __totalmemaccesstime += MEM_ACCESS_COST; //increment counter
+
+            //if reference is a read
+            if (operation == 'r' || operation == 'R')
+                __readfaults++; //increment counter
+                //printf("%d: read page %d\n", __totalrefcount, pagenum);
             else if (operation == 'w' || operation == 'W')
             {//if reference is a write
-                newentry->ref = 1;//page has been read
                 // printf("%d: write page %d\n", __totalrefcount, pagenum);
-                __writefaults++;
+                __writefaults++; //increment counter
+                newentry->dirty = 1; //write to page
             }
-            else
-            {
+            else {
                 printf("Did not understand reference #%d.\n", __totalrefcount);
             }
         }
-        else {//page is found in memory
-            /* code */
-        }
-        
         printf("\n");
     }
     fclose(pagerefs);
