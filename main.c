@@ -48,11 +48,11 @@ typedef struct page_table table;
 pgentry* insertPage(table* _tabletarget, pg* _pagetarget, pgentry* _prventry)
 {//creates an page table entry for the target page and inserts it after the target entry
     if (_tabletarget->full == 1) {//if page table is full
-        printf("Cannot insert page: %d. Table is full.", _pagetarget->pagenum);
+        printf("Cannot insert page: %d. Table is full.\n", _pagetarget->pagenum);
         return NULL;
     }
 
-    printf("Inserting page: %d", _pagetarget->pagenum);
+    //printf("Inserting page: %d", _pagetarget->pagenum);
     //make new page entry object
     pgentry* newentry = malloc(sizeof *newentry);
     newentry->pgaddr = _pagetarget;
@@ -252,7 +252,7 @@ int main(int argcount, char* argv[])
         else { //if page isn't in memory (page miss)
             printf("PAGE MISS! Page#: %d\n", pagenum);
             if (pages.full == 1) {//if page table is full
-                printf("\nPage table full. Table count: %d", pages.currlength);
+                printf("Page table full. Table count: %d\n", pages.currlength);
                 //find victim page
                 clockhand = findVictimPage(&pages, clockhand, MEM_ACCESS_COST);
             
